@@ -13,6 +13,7 @@ library(ggplot2)
 library(dplyr)
 library(stringr)
 library(patchwork)
+library(modelr)
 
 knitr::opts_chunk$set(
   fig.width = 6, 
@@ -104,5 +105,47 @@ models_results_df %>%
 ```
 
 # Problem 2 
+
+Import and clean data. 
+
+```{r}
+baby_df = 
+  read_csv("birthweight.csv") %>%
+  mutate(
+    babysex = as.factor(babysex), 
+    frace = as.factor(frace), 
+    mrace = as.factor(mrace)) 
+
+summarize(baby_df, count = sum(is.na(baby_df)))
+```
+
+Propose a regression model for birthweight. 
+
+```{r}
+model_fit = lm(bwt ~ gaweeks + delwt + fincome + smoken, data = baby_df) 
+
+model_fit %>% 
+  broom::tidy() %>% 
+  select(term, estimate, p.value) %>% 
+  mutate(term = str_replace(term, "\\(Intercept\\)","intercept")) %>% 
+  knitr::kable(digits = 3)
+```
+
+Based on hypothesized variables that influenced babyweight, I included the following variables in a linear regression model: mother's weight at delivery (delwt), gestational age in weeks (gaweeks), family monthly income (fincome), and average number cigarettes smoked per day during pregnancy (smoken). The following plot shows the residuals of the model plotted against the fitted values. 
+
+```{r}
+baby_df %>% 
+  add_residuals(model_fit) %>% 
+  add_predictions(model_fit) %>% 
+  select(resid, pred, delwt, gaweeks, fincome, smoken) %>% 
+  ggplot(aes(x = pred, y = resid)) + 
+  geom_point() + 
+  labs(
+    title = "Residuals vs. Fitted Predictions", 
+    x = "Fitted Prediction", 
+    y = "Residuals"
+  )
+
+```
 
 
