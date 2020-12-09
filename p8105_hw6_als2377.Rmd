@@ -289,7 +289,7 @@ plot1 + plot2
 The distribution of adjusted r-squared and log estimates both appear to be relatively symmetrical and normally distributed. The distribution of adjusted r-square estimates has a mean around 0.91, with a 95% confidence interval of 0.89-0.93, and the distribution of log estimates has a mean around 2.02, with a 95% confidence interval of 1.96-2.06.  
 
 ```{r}
-#log CI 
+#CI log 
 bootstrap_results %>% 
   summarize(
     ci_lower = quantile(log, 0.025), 
