@@ -14,6 +14,7 @@ library(dplyr)
 library(stringr)
 library(modelr)
 library(mgcv)
+library(patchwork)
 
 knitr::opts_chunk$set(
   fig.width = 6, 
@@ -193,7 +194,7 @@ cv_df %>%
   mutate(model = fct_inorder(model)) %>% 
   ggplot(aes(x = model, y = rmse)) + geom_violin() + 
   labs(
-    title = "Comparing Model Fit by Root Means Square Errors(RMSE)", 
+    title = "Comparing Model Fit by Root Means Square Errors (RMSE)", 
     x = "Model", 
     y = "RMSE"
   )
@@ -201,4 +202,106 @@ cv_df %>%
 
 The plotted Root Means Square Errors (RMSE) for each model indicates that Model 3, the linear model containing head circumference, length, sex, and all interactions between the three variables produces the best fit. The significantly lower RMSE values of this model indicates a better fit. Models 1 and 2 produce fairly similar RMSE distributions and are worse in predictive accuracy as compared to Model 3. 
 
-# Problem 3 
+# Problem 3
+
+Download 2017 Central Park weather data.  
+
+```{r}
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2017-01-01",
+    date_max = "2017-12-31") %>%
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
+```
+
+Set up bootstrapping.  
+
+```{r}
+boot_sample = function(df) {
+  sample_frac(df, replace = TRUE)
+}
+
+boot_straps = 
+  tibble(
+    strap_number = 1:5000,
+    strap_sample = rerun(5000, boot_sample(weather_df))
+  )
+
+```
+
+Conduct analysis using bootstrapping. 
+
+```{r}
+bootstrap_results = 
+  boot_straps %>% 
+  mutate(
+    models = map(.x = strap_sample, ~lm(tmax ~ tmin, data = .x)), 
+    results = map(models, broom::tidy)) %>% 
+  unnest(results) %>% 
+  select(strap_number, term, estimate) %>% 
+  mutate(
+    term = str_replace(term, "\\(Intercept\\)", "intercept")) %>% 
+ pivot_wider(
+    names_from = "term", 
+    values_from = "estimate"
+  ) %>% 
+  mutate(
+    log = log(intercept * tmin)) 
+
+bootstrap_results2 = 
+  boot_straps %>% 
+  mutate(
+    models = map(.x = strap_sample, ~lm(tmax ~ tmin, data = .x )), 
+    results = map(models, broom::glance)) %>% 
+  unnest(results) %>% 
+  select(strap_number, adj.r.squared)
+```
+
+Plot the distribution of the estimates. 
+
+```{r}
+plot1 = 
+bootstrap_results2 %>% 
+  ggplot(aes(x = adj.r.squared)) + geom_density() + 
+  labs(
+    title = "Distribution of Adjusted R-Squared", 
+    x = "Adjusted R-Squared", 
+    y = "Density"
+  )
+
+plot2 = bootstrap_results %>% 
+  ggplot(aes(x = log)) + geom_density() + 
+  labs(
+    title = "Distribution of Log Estimate", 
+    x = "Log Estimate",  
+    y = "Density"
+  )
+
+plot1 + plot2 
+```
+
+The distribution of adjusted r-squared and log estimates both appear to be relatively symmetrical and normally distributed. The distribution of adjusted r-square estimates has a mean around 0.91, with a 95% confidence interval of 0.89-0.93, and the distribution of log estimates has a mean around 2.02, with a 95% confidence interval of 1.96-2.06.  
+
+```{r}
+#log CI 
+bootstrap_results %>% 
+  summarize(
+    ci_lower = quantile(log, 0.025), 
+    ci_upper = quantile(log, 0.975)) %>% 
+  knitr::kable()
+
+#CI adjusted r-squared
+bootstrap_results2 %>% 
+   summarize(
+    ci_lower = quantile(adj.r.squared, 0.025), 
+    ci_upper = quantile(adj.r.squared, 0.975)) %>% 
+  knitr::kable()
+```
+
+
